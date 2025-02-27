@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link 
+        href="https://fonts.googleapis.com/css2?family=MuseoModerno:wght@300;500;700&display=swap" 
+        rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css"/>
+    <title>Running App</title>
+</head>
+<body>
+    <div id="map"></div>
+    <button onclick="stopTracking()">Stop Watching Location</button>
+
+    <form id="runForm">
+        <label for="entry">Number of miles today</label>
+        <br />
+        <input type="number" id="entry" step="0.1"/>
+        <br />
+        <button type="submit">Add</button>
+    </form>
+
+    <hr />
+    
+    <section class="entrieWrapper">
+        <h3>Last 7 Days</h3>
+        <ul id="entries"></ul>
+    </section>
+
+    <section class="data">
+        <div>
+            <p>Total:</p>
+            <span id="total">0</span> miles
+        </div>
+        <div>
+            <p>Average Distance:</p>
+            <span id="average">0</span> miles
+        </div>
+        <div>
+            <p>This Week's High:</p>
+            <span id="high">0</span> miles
+        </div>
+    </section>
+
+    <section class="progress">
+        <h3>
+            Weekly Target: <span id="progressTotal"></span> / 
+            <input type="number" id="target" value="25" min="1" step="1"/> miles
+        </h3>
+        <div class="progressCircleWrapper">
+            <div id="progressCircle">
+                <div id="progressCenter"></div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        let entries = [];
+        let watchId;
+        let positions = [];
+        let totalDistance = 0;
+
+        const entriesWrapper = document.querySelector("#entries");
+        const totalElement = document.getElementById("total");
+        const averageElement = document.getElementById("average");
+        const highElement = document.getElementById("high");
+        const progressTotalElement = document.getElementById("progressTotal");
+        const targetElement = document.getElementById("target");
+        const entryInput = document.querySelector("#entry");
+        const progressCircle = document.querySelector("#progressCircle");
+        const form = document.getElementById("runForm");
+
+        function updateEntriesList() {
+            entriesWrapper.innerHTML = "";
+            entries.forEach((entry, index) => {
+                const listItem = document.createElement("li");
+                listItem.textContent = `Day ${index + 1}: ${entry.toFixed(1)} miles`;
+                entriesWrapper.appendChild(listItem);
+            });
+        }
+
+        function calcTotal() {
+            const total = entries.reduce((sum, val) => sum + val, 0).toFixed(1);
+            totalElement.innerText = total;
+            progressTotalElement.innerText = total;
+        }
+
+        function calcAverage() {
+            if (entries.length === 0) {
+                averageElement.innerText = "0.0";
+                return;
+            }
+            const average = (entries.reduce((sum, val) => sum + val, 0) / entries.length).toFixed(1);
+            averageElement.innerText = average;
+        }
+
+        function calcGoal() {
+            const total = entries.reduce((sum, val) => sum + val, 0);
+            const target = Number(targetElement.value) || 25;
+            const completedPercent = Math.min(((total / target) * 100).toFixed(1), 100);
+            progressCircle.style.background = `conic-gradient(#70db70 ${completedPercent}%, #2d7340 ${completedPercent}% 100%)`;
+        }
+
+        function weeklyHigh() {
+            if (entries.length === 0) {
+                highElement.innerText = "0.0";
+                return;
+            }
+            const high = Math.max(...entries).toFixed(1);
+            highElement.innerText = high;
+        }
+
+        function handleSubmit(event) {
+            event.preventDefault();
+            const entry = parseFloat(entryInput.value);
+            if (isNaN(entry) || entry <= 0) return;
+
+            if (entries.length >= 7) {
+                entries.shift(); // Remove oldest entry to maintain 7 days
+            }
+
+            entries.push(entry);
+            form.reset();
+            updateEntriesList();
+            calcTotal();
+            calcAverage();
+            weeklyHigh();
+            calcGoal();
+        }
+
+        form.addEventListener("submit", handleSubmit);
+        targetElement.addEventListener("input", calcGoal); // Updates progress when goal changes
+
+        function startTracking() {
+            watchId = navigator.geolocation.watchPosition(position => {
+                const { latitude, longitude } = position.coords;
+                const newPosition = { lat: latitude, lon: longitude, timestamp: Date.now() };
+
+                if (positions.length > 0) {
+                    const lastPosition = positions[positions.length - 1];
+                    const distance = calculateDistance(lastPosition, newPosition);
+                    totalDistance += distance;
+                    totalElement.innerText = totalDistance.toFixed(2) + " miles";
+                }
+
+                positions.push(newPosition);
+                updateMap(latitude, longitude);
+            }, handleError, { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 });
+        }
+
+        function stopTracking() {
+            navigator.geolocation.clearWatch(watchId);
+            console.log("Stopped tracking.");
+        }
+
+        function calculateDistance(pos1, pos2) {
+            const R = 3958.8;
+            const dLat = (pos2.lat - pos1.lat) * (Math.PI / 180);
+            const dLon = (pos2.lon - pos1.lon) * (Math.PI / 180);
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(pos1.lat * (Math.PI / 180)) * Math.cos(pos2.lat * (Math.PI / 180)) * Math.sin(dLon / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function updateMap(lat, lon) {
+            document.getElementById('map').innerHTML = `<iframe width="800" height="300" src="https://maps.google.com/maps?q=${lat},${lon}&z=15&output=embed"></iframe>`;
+        }
+
+        function handleError(error) {
+            console.error("Geolocation error:", error);
+        }
+
+        startTracking();
+    </script>
+</body>
+</html>
