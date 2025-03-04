@@ -28,69 +28,55 @@ import com.google.maps.android.compose.*
 
 @Composable
 fun RunDetailsScreen(navController: NavController, runId: String, runViewModel: RunViewModel = viewModel()) {
-    // Fetch the run by ID
-    val run by runViewModel.allRuns.collectAsState(initial = emptyList()).let { runs ->
-        runs.find { it.id.toString() == runId }
-    }
+    val allRuns by runViewModel.allRuns.collectAsState(initial = emptyList())
+    val run = allRuns.find { it.id.toString() == runId }
 
-    // Handle case where the run is not found
     if (run == null) {
         Text("Run not found!")
         return
     }
 
-    var currentLocation by remember { mutableStateOf(LatLng(0.0, 0.0)) }
-    val mapProperties = remember { mutableStateOf(MapProperties(isMyLocationEnabled = true)) }
+    val context = LocalContext.current
+    val runLocations = run.routeCoordinates.map { LatLng(it.latitude, it.longitude) }
+
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(currentLocation, 15f)
+        position = if (runLocations.isNotEmpty()) {
+            CameraPosition.fromLatLngZoom(runLocations.first(), 15f)
+        } else {
+            CameraPosition.fromLatLngZoom(LatLng(0.0, 0.0), 15f)
+        }
     }
 
-    val context = LocalContext.current
-
-    // Get the locations for the run (replace with actual locations from the run)
-    val runLocations = run.locations.map { LatLng(it.latitude, it.longitude) }
-
-    // Column layout
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "Run Details", style = MaterialTheme.typography.headlineMedium)
+        Text("Run Details", style = MaterialTheme.typography.headlineMedium)
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(16.dp))
 
-        Text(text = "Run Date: ${run.timeInMillis}")
-        Text(text = "Distance: %.2f miles".format(run.distanceInMeters / 1609.34f))
-        Text(text = "Avg Speed: %.2f mph".format(run.avgSpeed * 0.621371))
+        Text("Run Date: ${run.timeInMillis}")
+        Text("Distance: %.2f miles".format(run.distanceInMeters / 1609.34f))
+        Text("Avg Speed: %.2f mph".format(run.avgSpeed * 0.621371))
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // Google Map composable for showing the route
         GoogleMap(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            cameraPositionState = cameraPositionState,
-            properties = mapProperties.value
+            modifier = Modifier.weight(1f),
+            cameraPositionState = cameraPositionState
         ) {
-            // Add markers for each location in the run
-            for (location in runLocations) {
+            runLocations.forEach { location ->
                 Marker(
                     state = rememberMarkerState(position = location),
                     title = "Run Point"
                 )
             }
 
-            // Draw polyline to show the route
-            PolylineOptions().apply {
-                addAll(runLocations)
-                color(0xFF0000FF.toInt())
-                width(5f)
-            }.let {
-                PolylineOptions.addPolyline(it)
-            }
+            Polyline(
+                points = runLocations,
+                color = androidx.compose.ui.graphics.Color.Blue,
+                width = 5f
+            )
         }
     }
 }

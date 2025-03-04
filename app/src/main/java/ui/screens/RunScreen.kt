@@ -95,10 +95,11 @@ fun RunScreen(navController: NavController) {
                 runViewModel.stopRun()
                 isTracking = false
             } else {
-                runViewModel.startRun(distance, time, speed)
+                runViewModel.startRun()
                 isTracking = true
             }
-        }) {
+        })
+        {
             Text(text = if (isTracking) "Stop Run" else "Start Run")
         }
 

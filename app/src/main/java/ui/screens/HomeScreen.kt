@@ -28,7 +28,7 @@ fun HomeScreen(navController: NavController, runViewModel: RunViewModel = viewMo
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "Welcome to Running Tracker", style = MaterialTheme.typography.headlineMedium)
+        Text(text = "Welcome to RoadRunners!", style = MaterialTheme.typography.headlineMedium)
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -47,47 +47,51 @@ fun HomeScreen(navController: NavController, runViewModel: RunViewModel = viewMo
 
 @Composable
 fun RunHistoryList(runs: List<Run>, navController: NavController) {
-    // Sort runs by the most recent first (descending order)
-    val sortedRuns = runs.sortedByDescending { it.timeInMillis }
+    val groupedRuns = runs
+        .sortedByDescending { it.date }
+        .groupBy { formatDateInEST(it.date) } // Group by formatted date (day)
 
     LazyColumn {
-        items(sortedRuns) { run ->
-            // Format the date for display
-            val dateFormat = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
-            val estTimeZone = TimeZone.getTimeZone("America/New_York") // EST timezone
-            dateFormat.timeZone = estTimeZone
-            val runDate = dateFormat.format(Date(run.timeInMillis))
-            val formattedDate = formatDateInEST(run.date)
-            Text(text = formattedDate)
-
-            // Display each run as a Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp)
-                    .clickable {
-                        // Navigate to the detailed run screen, passing the run data
-                        navController.navigate("runDetail/${run.id}")
-                    },
-                shape = MaterialTheme.shapes.medium
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Run on: $runDate",
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Text(
-                        text = "Distance: %.2f miles".format(run.distanceInMeters / 1609.34f), // Convert meters to miles
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = "Avg Speed: %.2f mph".format(run.avgSpeed * 0.621371), // Convert km/h to mph
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+        groupedRuns.forEach { (date, runsOnDate) ->
+            // Date Header
+            item {
+                Text(
+                    text = date,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp)
+                )
             }
+
+            // List of runs for that date
+            items(runsOnDate) { run ->
+                RunCard(run, navController)
+            }
+        }
+    }
+}
+
+@Composable
+fun RunCard(run: Run, navController: NavController) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clickable { navController.navigate("runDetail/${run.id}") },
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Run ${run.id}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "Distance: %.2f miles".format(run.distanceInMeters / 1609.34f),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "Avg Speed: %.2f mph".format(run.avgSpeed * 0.621371f),
+                style = MaterialTheme.typography.bodyMedium
+            )
         }
     }
 }

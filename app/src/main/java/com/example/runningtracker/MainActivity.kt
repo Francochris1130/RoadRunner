@@ -17,21 +17,36 @@ import androidx.core.content.ContextCompat
 import com.example.runningtracker.ui.screens.HomeScreen
 import com.example.runningtracker.ui.screens.RunScreen
 import com.example.runningtracker.ui.screens.StatisticsScreen
+import com.example.runningtracker.ui.screens.RunViewModel
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.tasks.OnSuccessListener
 
 class MainActivity : ComponentActivity() {
-    private lateinit var googleMap: GoogleMap
+
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var runViewModel: RunViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize location client and run view model
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        runViewModel = RunViewModel(application)
+
+        // Request location permissions
         requestLocationPermission()
 
-        enableEdgeToEdge()
         setContent {
-            val navController = rememberNavController()
-            MainScreen(navController)
+            MainScreen() // Pass the navController to MainScreen
         }
     }
 
+    // Request permissions for location
     private fun requestLocationPermission() {
         val permissions = arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -41,11 +56,13 @@ class MainActivity : ComponentActivity() {
         val permissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) { permissionsGranted ->
-            val fineLocationGranted = permissionsGranted[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
-            val coarseLocationGranted = permissionsGranted[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+            val fineLocationGranted =
+                permissionsGranted[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+            val coarseLocationGranted =
+                permissionsGranted[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
 
             if (fineLocationGranted || coarseLocationGranted) {
-                enableMyLocation()
+                enableLocationUpdates()
             } else {
                 // Handle permission denial
             }
@@ -62,58 +79,85 @@ class MainActivity : ComponentActivity() {
         if (!isFineLocationGranted && !isCoarseLocationGranted) {
             permissionLauncher.launch(permissions)
         } else {
-            enableMyLocation()
+            enableLocationUpdates()
         }
     }
 
-    private fun enableMyLocation() {
-        if (::googleMap.isInitialized) {
-            try {
-                googleMap.isMyLocationEnabled = true
-            } catch (e: SecurityException) {
-                e.printStackTrace()
-            }
-        }
-    }
-}
+    // Enable location updates
+    private fun enableLocationUpdates() {
+        // Create a location request with a 1-second interval and high accuracy.
+        val locationRequest = LocationRequest.Builder(1000) // 1000 ms interval (1 second)
+            .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY) // High accuracy
+            .build()
 
-@Composable
-fun MainScreen(navController: NavHostController) {
-    Scaffold(
-        bottomBar = { BottomNavigationBar(navController) }
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = "home",
-            modifier = Modifier.padding(innerPadding)
+        // Check if permission is granted
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
         ) {
-            composable("home") { HomeScreen(navController) }
-            composable("run") { RunScreen(navController) }
-            composable("statistics") { StatisticsScreen(navController) }
-        }
-    }
-}
+            // Location callback to handle location updates
+            val locationCallback = object : LocationCallback() {
+                override fun onLocationResult(locationResult: LocationResult) {
+                    // Use locationResult to get the latest location
+                    locationResult.locations.firstOrNull()?.let {
+                        val lat = it.latitude
+                        val lon = it.longitude
+                        runViewModel.appendLocation(lat, lon)  // Update the route with the new coordinates
+                    }
+                }
+            }
 
-@Composable
-fun BottomNavigationBar(navController: NavHostController) {
-    val items = listOf(
-        BottomNavItem("home", "Home"),
-        BottomNavItem("run", "Run"),
-        BottomNavItem("statistics", "Stats")
-    )
-
-    NavigationBar {
-        val currentRoute = navController.currentDestination?.route
-
-        items.forEach { item ->
-            NavigationBarItem(
-                selected = currentRoute == item.route,
-                onClick = { navController.navigate(item.route) },
-                label = { Text(item.label) },
-                icon = { /* Add icons here if needed */ }
+            // Request location updates
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                null // Using the default Looper (main thread)
             )
         }
     }
+
 }
 
-data class BottomNavItem(val route: String, val label: String)
+
+    @Composable
+    fun MainScreen() {
+        val navController = rememberNavController()
+        Scaffold(
+            bottomBar = { BottomNavigationBar(navController) }
+        ) { innerPadding ->
+            NavHost(
+                navController = navController,
+                startDestination = "home",
+                modifier = Modifier.padding(innerPadding)
+            ) {
+                composable("home") { HomeScreen(navController) }
+                composable("run") { RunScreen(navController) }
+                composable("statistics") { StatisticsScreen(navController) }
+            }
+        }
+    }
+
+    @Composable
+    fun BottomNavigationBar(navController: NavHostController) {
+        val items = listOf(
+            BottomNavItem("home", "Home"),
+            BottomNavItem("run", "Run"),
+            BottomNavItem("statistics", "Stats")
+        )
+
+        NavigationBar {
+            val currentRoute = navController.currentDestination?.route
+
+            items.forEach { item ->
+                NavigationBarItem(
+                    selected = currentRoute == item.route,
+                    onClick = { navController.navigate(item.route) },
+                    label = { Text(item.label) },
+                    icon = { /* Add icons here if needed */ }
+                )
+            }
+        }
+    }
+
+    data class BottomNavItem(val route: String, val label: String)
